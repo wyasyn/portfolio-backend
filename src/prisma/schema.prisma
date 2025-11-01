@@ -1,0 +1,126 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+enum Role {
+    USER
+    ADMIN
+}
+
+model User {
+    id        String   @id @default(cuid())
+    email     String   @unique
+    password  String
+    name      String?
+    role      Role     @default(USER)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    sessions Session[]
+
+    @@map("users")
+}
+
+model Session {
+    id        String   @id @default(cuid())
+    userId    String
+    token     String   @unique
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@map("sessions")
+}
+
+model Project {
+    id          String   @id @default(cuid())
+    title       String
+    description String   @db.Text
+    tags        String[]
+    imageUrl    String?
+    githubUrl   String?
+    liveUrl     String?
+    stack       String[]
+    featured    Boolean  @default(false)
+    order       Int      @default(0)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    analytics ViewAnalytics[]
+
+    @@index([featured])
+    @@map("projects")
+}
+
+model Blog {
+    id          String    @id @default(cuid())
+    title       String
+    slug        String    @unique
+    content     String    @db.Text
+    excerpt     String?   @db.Text
+    tags        String[]
+    imageUrl    String?
+    published   Boolean   @default(false)
+    publishedAt DateTime?
+    views       Int       @default(0)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+
+    analytics ViewAnalytics[]
+
+    @@index([published])
+    @@index([slug])
+    @@map("blogs")
+}
+
+model Contact {
+    id        String   @id @default(cuid())
+    name      String
+    email     String
+    message   String   @db.Text
+    read      Boolean  @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([read])
+    @@map("contacts")
+}
+
+model Skill {
+    id        String   @id @default(cuid())
+    category  String
+    name      String
+    iconUrl   String?
+    level     Int      @default(0)
+    order     Int      @default(0)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([category])
+    @@map("skills")
+}
+
+model ViewAnalytics {
+    id        String   @id @default(cuid())
+    projectId String?
+    blogId    String?
+    viewCount Int      @default(1)
+    ipAddress String?
+    userAgent String?
+    referrer  String?
+    createdAt DateTime @default(now())
+
+    project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    blog    Blog?    @relation(fields: [blogId], references: [id], onDelete: Cascade)
+
+    @@index([projectId])
+    @@index([blogId])
+    @@map("view_analytics")
+}
