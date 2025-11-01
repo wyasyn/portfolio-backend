@@ -28,7 +28,7 @@ A production-grade portfolio backend API built with Express.js, TypeScript, Pris
 1. Clone the repository:
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/wyasyn/portfolio-backend.git
 cd portfolio-backend
 ```
 
