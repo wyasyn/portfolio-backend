@@ -13,16 +13,21 @@ enum Role {
 }
 
 model User {
-    id        String   @id @default(cuid())
-    email     String   @unique
-    password  String
-    name      String?
-    role      Role     @default(USER)
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    id            String    @id @default(cuid())
+    email         String    @unique
+    password      String
+    name          String?
+    role          Role      @default(USER)
+    emailVerified Boolean   @default(false)
+    lastLoginAt   DateTime?
+    isActive      Boolean   @default(true)
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
 
     sessions Session[]
 
+    @@index([email])
+    @@index([isActive])
     @@map("users")
 }
 
@@ -36,26 +41,31 @@ model Session {
     user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
     @@index([userId])
+    @@index([token])
+    @@index([expiresAt])
     @@map("sessions")
 }
 
 model Project {
-    id          String   @id @default(cuid())
+    id          String    @id @default(cuid())
     title       String
-    description String   @db.Text
+    description String    @db.Text
     tags        String[]
     imageUrl    String?
     githubUrl   String?
     liveUrl     String?
     stack       String[]
-    featured    Boolean  @default(false)
-    order       Int      @default(0)
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+    featured    Boolean   @default(false)
+    order       Int       @default(0)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    deletedAt   DateTime?
 
-    analytics ViewAnalytics[]
+    viewEvents ViewEvent[]
 
     @@index([featured])
+    @@index([order])
+    @@index([deletedAt])
     @@map("projects")
 }
 
@@ -69,34 +79,42 @@ model Blog {
     imageUrl    String?
     published   Boolean   @default(false)
     publishedAt DateTime?
-    views       Int       @default(0)
+    readTime    Int?
     createdAt   DateTime  @default(now())
     updatedAt   DateTime  @updatedAt
+    deletedAt   DateTime?
 
-    analytics ViewAnalytics[]
+    viewEvents ViewEvent[]
 
-    @@index([published])
+    @@index([published, publishedAt])
     @@index([slug])
+    @@index([deletedAt])
+    @@index([tags])
     @@map("blogs")
 }
 
 model Contact {
-    id        String   @id @default(cuid())
+    id        String    @id @default(cuid())
     name      String
     email     String
-    message   String   @db.Text
-    read      Boolean  @default(false)
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    subject   String?
+    message   String    @db.Text
+    read      Boolean   @default(false)
+    replied   Boolean   @default(false)
+    repliedAt DateTime?
+    notes     String?   @db.Text
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
 
-    @@index([read])
+    @@index([read, replied])
+    @@index([createdAt])
     @@map("contacts")
 }
 
 model Skill {
     id        String   @id @default(cuid())
     category  String
-    name      String
+    name      String   @unique
     iconUrl   String?
     level     Int      @default(0)
     order     Int      @default(0)
@@ -104,23 +122,42 @@ model Skill {
     updatedAt DateTime @updatedAt
 
     @@index([category])
+    @@index([order])
     @@map("skills")
 }
 
-model ViewAnalytics {
+model ViewEvent {
     id        String   @id @default(cuid())
     projectId String?
     blogId    String?
-    viewCount Int      @default(1)
     ipAddress String?
-    userAgent String?
-    referrer  String?
-    createdAt DateTime @default(now())
+    userAgent String?  @db.Text
+    referrer  String?  @db.Text
+    country   String?
+    city      String?
+    timestamp DateTime @default(now())
 
     project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
     blog    Blog?    @relation(fields: [blogId], references: [id], onDelete: Cascade)
 
-    @@index([projectId])
-    @@index([blogId])
-    @@map("view_analytics")
+    @@index([projectId, timestamp])
+    @@index([blogId, timestamp])
+    @@index([timestamp])
+    @@map("view_events")
+}
+
+model Newsletter {
+    id             String    @id @default(cuid())
+    email          String    @unique
+    subscribed     Boolean   @default(true)
+    verified       Boolean   @default(false)
+    verifiedAt     DateTime?
+    subscribedAt   DateTime  @default(now())
+    unsubscribedAt DateTime?
+    createdAt      DateTime  @default(now())
+    updatedAt      DateTime  @updatedAt
+
+    @@index([subscribed])
+    @@index([email])
+    @@map("newsletter")
 }

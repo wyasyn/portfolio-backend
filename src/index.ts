@@ -87,7 +87,7 @@ app.listen(PORT, async () => {
     await prisma.$connect();
     logger.info('✅ Database connected');
   } catch (error) {
-    logger.error('❌ Database connection failed:', error);
+    logger.error({ err: error }, '❌ Database connection failed');
     process.exit(1);
   }
 });

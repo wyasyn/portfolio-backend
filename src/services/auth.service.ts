@@ -14,14 +14,18 @@ export class AuthService {
   }
 
   generateToken(userId: string): string {
-    return jwt.sign({ userId }, config.auth.jwtSecret, {
-      expiresIn: config.auth.jwtExpiresIn,
-    });
+    return jwt.sign(
+      { userId },
+      config.auth.jwtSecret as jwt.Secret, // ✅ Cast to jwt.Secret
+      {
+        expiresIn: config.auth.jwtExpiresIn as string | number, // ✅ Valid type
+      }
+    );
   }
 
   verifyToken(token: string): { userId: string } | null {
     try {
-      return jwt.verify(token, config.auth.jwtSecret) as { userId: string };
+      return jwt.verify(token, config.auth.jwtSecret as jwt.Secret) as { userId: string };
     } catch {
       return null;
     }

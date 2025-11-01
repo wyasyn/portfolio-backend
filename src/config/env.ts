@@ -52,8 +52,8 @@ export const config = {
   auth: {
     secret: env.BETTER_AUTH_SECRET,
     url: env.BETTER_AUTH_URL,
-    jwtSecret: env.JWT_SECRET,
-    jwtExpiresIn: env.JWT_EXPIRES_IN,
+    jwtSecret: env.JWT_SECRET as string,
+    jwtExpiresIn: env.JWT_EXPIRES_IN as string,
   },
   cloudinary: {
     cloudName: env.CLOUDINARY_CLOUD_NAME,
