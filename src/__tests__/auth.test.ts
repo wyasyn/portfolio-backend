@@ -1,6 +1,6 @@
 import request from 'supertest';
 import app from '../index';
-import { prisma } from '@/db/prisma';
+import { prisma } from '../db/prisma';
 
 describe('Auth API', () => {
   beforeAll(async () => {
