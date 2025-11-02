@@ -7,9 +7,11 @@ import { createSkillSchema, updateSkillSchema } from '@/api/validators/skill.val
 
 const router: Router = Router();
 
+// Public routes
 router.get('/', skillController.getAll);
 router.get('/:id', skillController.getById);
 
+// Admin routes
 router.post(
   '/',
   authenticate,
@@ -20,6 +22,15 @@ router.post(
 );
 
 router.put(
+  '/:id',
+  authenticate,
+  requireAdmin,
+  upload.single('icon'),
+  validate(updateSkillSchema),
+  skillController.update
+);
+
+router.patch(
   '/:id',
   authenticate,
   requireAdmin,

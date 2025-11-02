@@ -22,13 +22,25 @@ const router: Router = Router();
  *             required:
  *               - email
  *               - password
+ *               - name
  *             properties:
  *               email:
  *                 type: string
+ *                 format: email
+ *                 example: user@example.com
  *               password:
  *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 example: SecurePass123!
  *               name:
  *                 type: string
+ *                 example: John Doe
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *       400:
+ *         description: Validation error or user already exists
  */
 router.post('/register', validate(registerSchema), authController.register);
 
@@ -39,6 +51,45 @@ router.post('/register', validate(registerSchema), authController.register);
  *     tags:
  *       - Auth
  *     summary: Login user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: SecurePass123!
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       type: object
+ *                     token:
+ *                       type: string
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: Invalid credentials
  */
 router.post('/login', validate(loginSchema), authController.login);
 
@@ -49,8 +100,14 @@ router.post('/login', validate(loginSchema), authController.login);
  *     tags:
  *       - Auth
  *     summary: Logout user
+ *     description: Invalidates the current user session
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logout successful
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
  */
 router.post('/logout', authenticate, authController.logout);
 
@@ -61,8 +118,35 @@ router.post('/logout', authenticate, authController.logout);
  *     tags:
  *       - Auth
  *     summary: Get current user
+ *     description: Returns the authenticated user's profile information
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
  */
 router.get('/me', authenticate, authController.me);
 

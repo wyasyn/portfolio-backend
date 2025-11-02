@@ -7,6 +7,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().default('5000'),
   API_VERSION: z.string().default('v1'),
+  ENABLE_DOCS: z.string().default('true'),
   DATABASE_URL: z.string(),
   REDIS_URL: z.string(),
   REDIS_PASSWORD: z.string().optional(),
@@ -41,6 +42,7 @@ export const config = {
     env: env.NODE_ENV,
     port: parseInt(env.PORT, 10),
     apiVersion: env.API_VERSION,
+    enableDocs: env.ENABLE_DOCS === 'true',
   },
   database: {
     url: env.DATABASE_URL,
@@ -52,8 +54,8 @@ export const config = {
   auth: {
     secret: env.BETTER_AUTH_SECRET,
     url: env.BETTER_AUTH_URL,
-    jwtSecret: env.JWT_SECRET as string,
-    jwtExpiresIn: env.JWT_EXPIRES_IN as string,
+    jwtSecret: env.JWT_SECRET,
+    jwtExpiresIn: env.JWT_EXPIRES_IN,
   },
   cloudinary: {
     cloudName: env.CLOUDINARY_CLOUD_NAME,

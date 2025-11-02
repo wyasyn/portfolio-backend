@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ZodSchema } from 'zod';
+import { ZodSchema, ZodError } from 'zod';
 import { ValidationError } from '@/utils/errors';
 
 export const validate = (schema: ZodSchema) => {
@@ -7,9 +7,13 @@ export const validate = (schema: ZodSchema) => {
     try {
       schema.parse(req.body);
       next();
-    } catch (error: any) {
-      const message = error.errors?.map((e: any) => e.message).join(', ') || 'Validation failed';
-      next(new ValidationError(message));
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const message = error.errors.map((e) => e.message).join(', ');
+        next(new ValidationError(message));
+      } else {
+        next(new ValidationError('Validation failed'));
+      }
     }
   };
 };

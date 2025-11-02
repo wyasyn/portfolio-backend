@@ -1,163 +1,207 @@
+
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
-    USER
-    ADMIN
+  USER
+  ADMIN
 }
 
 model User {
-    id            String    @id @default(cuid())
-    email         String    @unique
-    password      String
-    name          String?
-    role          Role      @default(USER)
-    emailVerified Boolean   @default(false)
-    lastLoginAt   DateTime?
-    isActive      Boolean   @default(true)
-    createdAt     DateTime  @default(now())
-    updatedAt     DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String?
+  role          Role      @default(USER)
+  emailVerified Boolean   @default(false)
+  lastLoginAt   DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-    sessions Session[]
+  sessions Session[]
 
-    @@index([email])
-    @@index([isActive])
-    @@map("users")
+  image    String?
+  accounts Account[]
+
+  banned     Boolean?  @default(false)
+  banReason  String?
+  banExpires DateTime?
+
+  @@index([email])
+  @@index([isActive])
+  @@map("users")
 }
 
 model Session {
-    id        String   @id @default(cuid())
-    userId    String
-    token     String   @unique
-    expiresAt DateTime
-    createdAt DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
-    @@index([token])
-    @@index([expiresAt])
-    @@map("sessions")
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+
+  impersonatedBy String?
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("sessions")
 }
 
 model Project {
-    id          String    @id @default(cuid())
-    title       String
-    description String    @db.Text
-    tags        String[]
-    imageUrl    String?
-    githubUrl   String?
-    liveUrl     String?
-    stack       String[]
-    featured    Boolean   @default(false)
-    order       Int       @default(0)
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-    deletedAt   DateTime?
+  id          String    @id @default(cuid())
+  title       String
+  description String    @db.Text
+  tags        String[]
+  imageUrl    String?
+  githubUrl   String?
+  liveUrl     String?
+  stack       String[]
+  featured    Boolean   @default(false)
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
-    viewEvents ViewEvent[]
+  viewEvents ViewEvent[]
 
-    @@index([featured])
-    @@index([order])
-    @@index([deletedAt])
-    @@map("projects")
+  @@index([featured])
+  @@index([order])
+  @@index([deletedAt])
+  @@map("projects")
 }
 
 model Blog {
-    id          String    @id @default(cuid())
-    title       String
-    slug        String    @unique
-    content     String    @db.Text
-    excerpt     String?   @db.Text
-    tags        String[]
-    imageUrl    String?
-    published   Boolean   @default(false)
-    publishedAt DateTime?
-    readTime    Int?
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-    deletedAt   DateTime?
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  content     String    @db.Text
+  excerpt     String?   @db.Text
+  tags        String[]
+  imageUrl    String?
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+  readTime    Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
-    viewEvents ViewEvent[]
+  viewEvents ViewEvent[]
 
-    @@index([published, publishedAt])
-    @@index([slug])
-    @@index([deletedAt])
-    @@index([tags])
-    @@map("blogs")
+  @@index([published, publishedAt])
+  @@index([slug])
+  @@index([deletedAt])
+  @@index([tags])
+  @@map("blogs")
 }
 
 model Contact {
-    id        String    @id @default(cuid())
-    name      String
-    email     String
-    subject   String?
-    message   String    @db.Text
-    read      Boolean   @default(false)
-    replied   Boolean   @default(false)
-    repliedAt DateTime?
-    notes     String?   @db.Text
-    createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
+  id        String    @id @default(cuid())
+  name      String
+  email     String
+  subject   String?
+  message   String    @db.Text
+  read      Boolean   @default(false)
+  replied   Boolean   @default(false)
+  repliedAt DateTime?
+  notes     String?   @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-    @@index([read, replied])
-    @@index([createdAt])
-    @@map("contacts")
+  @@index([read, replied])
+  @@index([createdAt])
+  @@map("contacts")
 }
 
 model Skill {
-    id        String   @id @default(cuid())
-    category  String
-    name      String   @unique
-    iconUrl   String?
-    level     Int      @default(0)
-    order     Int      @default(0)
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id        String   @id @default(cuid())
+  category  String
+  name      String   @unique
+  iconUrl   String?
+  level     Int      @default(0)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([category])
-    @@index([order])
-    @@map("skills")
+  @@index([category])
+  @@index([order])
+  @@map("skills")
 }
 
 model ViewEvent {
-    id        String   @id @default(cuid())
-    projectId String?
-    blogId    String?
-    ipAddress String?
-    userAgent String?  @db.Text
-    referrer  String?  @db.Text
-    country   String?
-    city      String?
-    timestamp DateTime @default(now())
+  id        String   @id @default(cuid())
+  projectId String?
+  blogId    String?
+  ipAddress String?
+  userAgent String?  @db.Text
+  referrer  String?  @db.Text
+  country   String?
+  city      String?
+  timestamp DateTime @default(now())
 
-    project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-    blog    Blog?    @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  blog    Blog?    @relation(fields: [blogId], references: [id], onDelete: Cascade)
 
-    @@index([projectId, timestamp])
-    @@index([blogId, timestamp])
-    @@index([timestamp])
-    @@map("view_events")
+  @@index([projectId, timestamp])
+  @@index([blogId, timestamp])
+  @@index([timestamp])
+  @@map("view_events")
 }
 
 model Newsletter {
-    id             String    @id @default(cuid())
-    email          String    @unique
-    subscribed     Boolean   @default(true)
-    verified       Boolean   @default(false)
-    verifiedAt     DateTime?
-    subscribedAt   DateTime  @default(now())
-    unsubscribedAt DateTime?
-    createdAt      DateTime  @default(now())
-    updatedAt      DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  email          String    @unique
+  subscribed     Boolean   @default(true)
+  verified       Boolean   @default(false)
+  verifiedAt     DateTime?
+  subscribedAt   DateTime  @default(now())
+  unsubscribedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-    @@index([subscribed])
-    @@index([email])
-    @@map("newsletter")
+  @@index([subscribed])
+  @@index([email])
+  @@map("newsletter")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@map("verification")
 }

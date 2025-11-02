@@ -7,9 +7,11 @@ import { createProjectSchema, updateProjectSchema } from '@/api/validators/proje
 
 const router: Router = Router();
 
+// Public routes
 router.get('/', projectController.getAll);
 router.get('/:id', projectController.getById);
 
+// Admin routes
 router.post(
   '/',
   authenticate,
@@ -20,6 +22,15 @@ router.post(
 );
 
 router.put(
+  '/:id',
+  authenticate,
+  requireAdmin,
+  upload.single('image'),
+  validate(updateProjectSchema),
+  projectController.update
+);
+
+router.patch(
   '/:id',
   authenticate,
   requireAdmin,

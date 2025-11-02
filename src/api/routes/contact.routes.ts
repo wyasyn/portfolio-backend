@@ -16,9 +16,18 @@ const contactLimiter = rateLimit({
 
 const router: Router = Router();
 
+// Public route - rate limited
 router.post('/', contactLimiter, validate(createContactSchema), contactController.submit);
+
+// Admin routes - all require authentication and admin role
 router.get('/', authenticate, requireAdmin, contactController.getAll);
-router.put('/:id/read', authenticate, requireAdmin, contactController.markAsRead);
+router.get('/stats', authenticate, requireAdmin, contactController.getStats);
+router.get('/:id', authenticate, requireAdmin, contactController.getById);
+
+router.patch('/:id/read', authenticate, requireAdmin, contactController.markAsRead);
+router.patch('/:id/replied', authenticate, requireAdmin, contactController.markAsReplied);
+router.patch('/:id/notes', authenticate, requireAdmin, contactController.updateNotes);
+
 router.delete('/:id', authenticate, requireAdmin, contactController.delete);
 
 export default router;

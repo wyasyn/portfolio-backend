@@ -1,45 +1,107 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { prisma } from '@/db/prisma';
-import { config } from '@/config/env';
-import { User, Role } from '@prisma/client';
+import { auth } from '@/utils/auth';
+import { Role } from '@prisma/client';
+import { fromNodeHeaders } from 'better-auth/node';
+import { IncomingHttpHeaders } from 'http';
 
 export class AuthService {
-  async hashPassword(password: string): Promise<string> {
-    return bcrypt.hash(password, 12);
+  /**
+   * Create a new user with Better Auth
+   */
+  async createUser(email: string, password: string, name: string, role: Role = 'USER') {
+    // Better Auth handles user creation through its API
+    const user = await auth.api.signUpEmail({
+      body: {
+        email,
+        password,
+        name,
+      },
+    });
+
+    // Update role if needed (Better Auth creates users with default role)
+    if (role !== 'USER') {
+      await prisma.user.update({
+        where: { id: user.user.id },
+        data: { role },
+      });
+    }
+
+    return {
+      id: user.user.id,
+      email: user.user.email,
+      name: user.user.name,
+      role: role,
+      createdAt: user.user.createdAt,
+    };
   }
 
-  async comparePassword(password: string, hash: string): Promise<boolean> {
-    return bcrypt.compare(password, hash);
+  /**
+   * Login user with Better Auth
+   */
+  async login(email: string, password: string) {
+    const result = await auth.api.signInEmail({
+      body: {
+        email,
+        password,
+      },
+    });
+
+    if (!result.user) {
+      throw new Error('Invalid credentials');
+    }
+
+    // Get full user data including role
+    const user = await prisma.user.findUnique({
+      where: { id: result.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+      },
+    });
+
+    return {
+      user: user!,
+      token: result.token, // ✅ Use token instead of session
+    };
   }
 
-  generateToken(userId: string): string {
-    return jwt.sign(
-      { userId },
-      config.auth.jwtSecret as jwt.Secret, // ✅ Cast to jwt.Secret
-      {
-        expiresIn: config.auth.jwtExpiresIn as string | number, // ✅ Valid type
-      }
-    );
-  }
+  /**
+   * Validate session using Better Auth
+   */
+  async validateSession(headers: IncomingHttpHeaders) {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(headers),
+    });
 
-  verifyToken(token: string): { userId: string } | null {
-    try {
-      return jwt.verify(token, config.auth.jwtSecret as jwt.Secret) as { userId: string };
-    } catch {
+    if (!session?.user) {
       return null;
     }
+
+    // Get full user data with role from database
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    });
+
+    return user;
   }
 
-  async createUser(email: string, password: string, name?: string, role: Role = 'USER') {
-    const hashedPassword = await this.hashPassword(password);
-    return prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        role,
-      },
+  /**
+   * Logout user with Better Auth
+   */
+  async logout(headers: IncomingHttpHeaders): Promise<void> {
+    await auth.api.signOut({
+      headers: fromNodeHeaders(headers),
+    });
+  }
+
+  /**
+   * Get user by ID
+   */
+  async getUserById(userId: string) {
+    return prisma.user.findUnique({
+      where: { id: userId },
       select: {
         id: true,
         email: true,
@@ -48,55 +110,6 @@ export class AuthService {
         createdAt: true,
       },
     });
-  }
-
-  async login(email: string, password: string) {
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      throw new Error('Invalid credentials');
-    }
-
-    const isValid = await this.comparePassword(password, user.password);
-    if (!isValid) {
-      throw new Error('Invalid credentials');
-    }
-
-    const token = this.generateToken(user.id);
-
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        token,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
-      token,
-    };
-  }
-
-  async validateSession(token: string): Promise<User | null> {
-    const session = await prisma.session.findUnique({
-      where: { token },
-      include: { user: true },
-    });
-
-    if (!session || session.expiresAt < new Date()) {
-      return null;
-    }
-
-    return session.user;
-  }
-
-  async logout(token: string): Promise<void> {
-    await prisma.session.delete({ where: { token } });
   }
 }
 

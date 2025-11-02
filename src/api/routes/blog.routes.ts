@@ -7,9 +7,11 @@ import { createBlogSchema, updateBlogSchema } from '@/api/validators/blog.valida
 
 const router: Router = Router();
 
+// Public routes
 router.get('/', blogController.getAll);
 router.get('/:slug', blogController.getBySlug);
 
+// Admin routes
 router.post(
   '/',
   authenticate,
@@ -20,6 +22,15 @@ router.post(
 );
 
 router.put(
+  '/:id',
+  authenticate,
+  requireAdmin,
+  upload.single('image'),
+  validate(updateBlogSchema),
+  blogController.update
+);
+
+router.patch(
   '/:id',
   authenticate,
   requireAdmin,

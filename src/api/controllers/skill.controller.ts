@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '@/types';
 import { prisma } from '@/db/prisma';
@@ -5,13 +6,19 @@ import { cacheService } from '@/db/redis';
 import { cloudinaryService } from '@/services/cloudinary.service';
 import { NotFoundError } from '@/utils/errors';
 
+// Define proper types for cached responses
+interface CachedSkillsResponse {
+  success: boolean;
+  data: any;
+}
+
 export class SkillController {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const category = req.query.category as string | undefined;
 
       const cacheKey = `skills:list:${category || 'all'}`;
-      const cached = await cacheService.get(cacheKey);
+      const cached = await cacheService.get<CachedSkillsResponse>(cacheKey);
 
       if (cached) {
         return res.json(cached);
@@ -73,8 +80,11 @@ export class SkillController {
 
       const skill = await prisma.skill.create({
         data: {
-          ...req.body,
+          category: req.body.category,
+          name: req.body.name,
           iconUrl,
+          level: req.body.level || 0,
+          order: req.body.order || 0,
         },
       });
 
@@ -95,16 +105,27 @@ export class SkillController {
       const { id } = req.params;
       let iconUrl = req.body.iconUrl;
 
+      const existing = await prisma.skill.findUnique({ where: { id } });
+      if (!existing) {
+        throw new NotFoundError('Skill not found');
+      }
+
       if (req.file) {
         iconUrl = await cloudinaryService.uploadImage(req.file, 'skills');
       }
 
+      const updateData: any = {};
+
+      // Only update fields that are provided
+      if (req.body.category !== undefined) updateData.category = req.body.category;
+      if (req.body.name !== undefined) updateData.name = req.body.name;
+      if (iconUrl !== undefined) updateData.iconUrl = iconUrl;
+      if (req.body.level !== undefined) updateData.level = req.body.level;
+      if (req.body.order !== undefined) updateData.order = req.body.order;
+
       const skill = await prisma.skill.update({
         where: { id },
-        data: {
-          ...req.body,
-          iconUrl,
-        },
+        data: updateData,
       });
 
       await cacheService.invalidatePattern('skills:*');
@@ -122,6 +143,11 @@ export class SkillController {
   async delete(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
+
+      const skill = await prisma.skill.findUnique({ where: { id } });
+      if (!skill) {
+        throw new NotFoundError('Skill not found');
+      }
 
       await prisma.skill.delete({ where: { id } });
 

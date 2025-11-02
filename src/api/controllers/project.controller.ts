@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '@/types';
 import { prisma } from '@/db/prisma';
@@ -6,6 +7,21 @@ import { cloudinaryService } from '@/services/cloudinary.service';
 import { analyticsService } from '@/services/analytics.service';
 import { NotFoundError } from '@/utils/errors';
 import { getPaginationParams, calculatePagination } from '@/utils/pagination';
+
+// Define proper types for cached responses
+interface CachedProjectResponse {
+  success: boolean;
+  data: {
+    id: string;
+    [key: string]: any;
+  };
+}
+
+interface CachedProjectsListResponse {
+  success: boolean;
+  data: any[];
+  pagination: any;
+}
 
 export class ProjectController {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
@@ -17,13 +33,13 @@ export class ProjectController {
       const featured = req.query.featured === 'true';
 
       const cacheKey = `projects:list:${page}:${limit}:${featured}`;
-      const cached = await cacheService.get(cacheKey);
+      const cached = await cacheService.get<CachedProjectsListResponse>(cacheKey);
 
       if (cached) {
         return res.json(cached);
       }
 
-      const where = featured ? { featured: true } : {};
+      const where = featured ? { featured: true, deletedAt: null } : { deletedAt: null };
 
       const [projects, total] = await Promise.all([
         prisma.project.findMany({
@@ -53,22 +69,27 @@ export class ProjectController {
       const { id } = req.params;
 
       const cacheKey = `project:${id}`;
-      const cached = await cacheService.get(cacheKey);
+      const cached = await cacheService.get<CachedProjectResponse>(cacheKey);
 
       if (cached) {
-        // Track view
-        const ip = req.ip || req.socket.remoteAddress;
-        await analyticsService.trackView(
-          'project',
-          id,
-          ip,
-          req.get('user-agent'),
-          req.get('referer')
-        );
+        // Track view without blocking response
+        analyticsService
+          .trackView('project', id, {
+            ipAddress: req.ip || req.socket.remoteAddress,
+            userAgent: req.get('user-agent'),
+            referrer: req.get('referer'),
+          })
+          .catch((err) => {
+            console.error('Failed to track view:', err);
+          });
+
         return res.json(cached);
       }
 
-      const project = await prisma.project.findUnique({ where: { id } });
+      const project = await prisma.project.findUnique({
+        where: { id, deletedAt: null },
+      });
+
       if (!project) {
         throw new NotFoundError('Project not found');
       }
@@ -76,15 +97,16 @@ export class ProjectController {
       const response = { success: true, data: project };
       await cacheService.set(cacheKey, response, 600);
 
-      // Track view
-      const ip = req.ip || req.socket.remoteAddress;
-      await analyticsService.trackView(
-        'project',
-        id,
-        ip,
-        req.get('user-agent'),
-        req.get('referer')
-      );
+      // Track view without blocking response
+      analyticsService
+        .trackView('project', id, {
+          ipAddress: req.ip || req.socket.remoteAddress,
+          userAgent: req.get('user-agent'),
+          referrer: req.get('referer'),
+        })
+        .catch((err) => {
+          console.error('Failed to track view:', err);
+        });
 
       res.json(response);
     } catch (error) {
@@ -102,8 +124,15 @@ export class ProjectController {
 
       const project = await prisma.project.create({
         data: {
-          ...req.body,
+          title: req.body.title,
+          description: req.body.description,
+          tags: req.body.tags || [],
+          stack: req.body.stack || [],
           imageUrl,
+          githubUrl: req.body.githubUrl,
+          liveUrl: req.body.liveUrl,
+          featured: req.body.featured || false,
+          order: req.body.order || 0,
         },
       });
 
@@ -124,16 +153,34 @@ export class ProjectController {
       const { id } = req.params;
       let imageUrl = req.body.imageUrl;
 
+      const existing = await prisma.project.findUnique({
+        where: { id, deletedAt: null },
+      });
+
+      if (!existing) {
+        throw new NotFoundError('Project not found');
+      }
+
       if (req.file) {
         imageUrl = await cloudinaryService.uploadImage(req.file, 'projects');
       }
 
+      const updateData: any = {};
+
+      // Only update fields that are provided
+      if (req.body.title !== undefined) updateData.title = req.body.title;
+      if (req.body.description !== undefined) updateData.description = req.body.description;
+      if (req.body.tags !== undefined) updateData.tags = req.body.tags;
+      if (req.body.stack !== undefined) updateData.stack = req.body.stack;
+      if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+      if (req.body.githubUrl !== undefined) updateData.githubUrl = req.body.githubUrl;
+      if (req.body.liveUrl !== undefined) updateData.liveUrl = req.body.liveUrl;
+      if (req.body.featured !== undefined) updateData.featured = req.body.featured;
+      if (req.body.order !== undefined) updateData.order = req.body.order;
+
       const project = await prisma.project.update({
         where: { id },
-        data: {
-          ...req.body,
-          imageUrl,
-        },
+        data: updateData,
       });
 
       await cacheService.invalidatePattern('projects:*');
@@ -153,7 +200,19 @@ export class ProjectController {
     try {
       const { id } = req.params;
 
-      await prisma.project.delete({ where: { id } });
+      const project = await prisma.project.findUnique({
+        where: { id, deletedAt: null },
+      });
+
+      if (!project) {
+        throw new NotFoundError('Project not found');
+      }
+
+      // Soft delete
+      await prisma.project.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
 
       await cacheService.invalidatePattern('projects:*');
       await cacheService.del(`project:${id}`);

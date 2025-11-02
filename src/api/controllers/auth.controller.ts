@@ -7,6 +7,14 @@ export class AuthController {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
       const { email, password, name } = req.body;
+
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: 'Name is required',
+        });
+      }
+
       const user = await authService.createUser(email, password, name);
       res.status(201).json({
         success: true,
@@ -27,17 +35,14 @@ export class AuthController {
         data: result,
         message: 'Login successful',
       });
-    } catch (error) {
+    } catch {
       next(new UnauthorizedError('Invalid credentials'));
     }
   }
 
   async logout(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const token = req.headers.authorization?.substring(7);
-      if (token) {
-        await authService.logout(token);
-      }
+      await authService.logout(req.headers);
       res.json({
         success: true,
         message: 'Logout successful',
@@ -49,7 +54,12 @@ export class AuthController {
 
   async me(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { password, ...user } = req.user!;
+      if (!req.user) {
+        throw new UnauthorizedError('User not authenticated');
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...user } = req.user;
       res.json({
         success: true,
         data: user,

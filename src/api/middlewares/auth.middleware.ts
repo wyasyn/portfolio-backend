@@ -1,23 +1,33 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '@/types';
-import { authService } from '@/services/auth.service';
+import { fromNodeHeaders } from 'better-auth/node';
+
 import { UnauthorizedError, ForbiddenError } from '@/utils/errors';
+
+import { Role } from '@prisma/client';
+import { auth } from '@/utils/auth';
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedError('No token provided');
-    }
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
 
-    const token = authHeader.substring(7);
-    const user = await authService.validateSession(token);
-
-    if (!user) {
+    if (!session?.user) {
       throw new UnauthorizedError('Invalid or expired token');
     }
 
-    req.user = user;
+    req.user = {
+      ...session.user,
+      password: '',
+      role: Role.USER,
+      lastLoginAt: null,
+      isActive: true,
+      banned: null,
+      banReason: null,
+      banExpires: null,
+      image: session.user.image ?? null,
+    };
     next();
   } catch (error) {
     next(error);
@@ -25,7 +35,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 };
 
 export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (!req.user || req.user.role !== 'ADMIN') {
+  if (!req.user || req.user.role !== Role.ADMIN) {
     return next(new ForbiddenError('Admin access required'));
   }
   next();

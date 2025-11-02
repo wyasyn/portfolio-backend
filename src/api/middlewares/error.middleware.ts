@@ -3,7 +3,7 @@ import { AppError } from '@/utils/errors';
 import { logger } from '@/config/logger';
 
 export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction) => {
-  logger.error('Error:', err);
+  logger.error({ err }, 'Error');
 
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
