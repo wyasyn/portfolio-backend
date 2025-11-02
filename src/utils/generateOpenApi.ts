@@ -1,0 +1,580 @@
+/* eslint-disable no-console */
+import { writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
+
+const openApiSpec = {
+  openapi: '3.0.0',
+  info: {
+    title: 'Portfolio API',
+    version: '1.0.0',
+    description: 'API documentation for portfolio website',
+    contact: {
+      name: 'API Support',
+      email: 'support@example.com',
+    },
+  },
+  servers: [
+    {
+      url: 'http://localhost:5000/api/v1',
+      description: 'Development server',
+    },
+    {
+      url: 'https://api.example.com/api/v1',
+      description: 'Production server',
+    },
+  ],
+  tags: [
+    { name: 'Auth', description: 'Authentication endpoints' },
+    { name: 'Projects', description: 'Project management endpoints' },
+    { name: 'Blogs', description: 'Blog management endpoints' },
+    { name: 'Skills', description: 'Skill management endpoints' },
+    { name: 'Contact', description: 'Contact form endpoints' },
+    { name: 'Analytics', description: 'Analytics endpoints' },
+  ],
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+    },
+    schemas: {
+      Error: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          message: { type: 'string' },
+          errors: { type: 'array', items: { type: 'object' } },
+        },
+      },
+      Success: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string' },
+        },
+      },
+      Pagination: {
+        type: 'object',
+        properties: {
+          total: { type: 'number' },
+          page: { type: 'number' },
+          limit: { type: 'number' },
+          totalPages: { type: 'number' },
+          hasNextPage: { type: 'boolean' },
+          hasPrevPage: { type: 'boolean' },
+        },
+      },
+      Project: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          description: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
+          stack: { type: 'array', items: { type: 'string' } },
+          imageUrl: { type: 'string', nullable: true },
+          githubUrl: { type: 'string', nullable: true },
+          liveUrl: { type: 'string', nullable: true },
+          featured: { type: 'boolean' },
+          order: { type: 'number' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          deletedAt: { type: 'string', format: 'date-time', nullable: true },
+        },
+      },
+      Blog: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          slug: { type: 'string' },
+          content: { type: 'string' },
+          excerpt: { type: 'string', nullable: true },
+          tags: { type: 'array', items: { type: 'string' } },
+          imageUrl: { type: 'string', nullable: true },
+          published: { type: 'boolean' },
+          publishedAt: { type: 'string', format: 'date-time', nullable: true },
+          readTime: { type: 'number', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          deletedAt: { type: 'string', format: 'date-time', nullable: true },
+        },
+      },
+      Skill: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          category: { type: 'string' },
+          name: { type: 'string' },
+          iconUrl: { type: 'string', nullable: true },
+          level: { type: 'number' },
+          order: { type: 'number' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      Contact: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+          subject: { type: 'string', nullable: true },
+          message: { type: 'string' },
+          read: { type: 'boolean' },
+          replied: { type: 'boolean' },
+          repliedAt: { type: 'string', format: 'date-time', nullable: true },
+          notes: { type: 'string', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
+  },
+  paths: {
+    '/projects': {
+      get: {
+        tags: ['Projects'],
+        summary: 'Get all projects',
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'number' } },
+          { name: 'limit', in: 'query', schema: { type: 'number' } },
+          { name: 'featured', in: 'query', schema: { type: 'boolean' } },
+        ],
+        responses: {
+          200: {
+            description: 'Success',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { type: 'array', items: { $ref: '#/components/schemas/Project' } },
+                    pagination: { $ref: '#/components/schemas/Pagination' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      post: {
+        tags: ['Projects'],
+        summary: 'Create a project',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['title', 'description'],
+                properties: {
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  tags: { type: 'array', items: { type: 'string' } },
+                  stack: { type: 'array', items: { type: 'string' } },
+                  githubUrl: { type: 'string' },
+                  liveUrl: { type: 'string' },
+                  featured: { type: 'boolean' },
+                  order: { type: 'number' },
+                  image: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Project created',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/Project' },
+                    message: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Unauthorized',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
+        },
+      },
+    },
+    '/projects/{id}': {
+      get: {
+        tags: ['Projects'],
+        summary: 'Get project by ID',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: {
+            description: 'Success',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/Project' },
+                  },
+                },
+              },
+            },
+          },
+          404: {
+            description: 'Not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
+        },
+      },
+      put: {
+        tags: ['Projects'],
+        summary: 'Update project',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  tags: { type: 'array', items: { type: 'string' } },
+                  stack: { type: 'array', items: { type: 'string' } },
+                  githubUrl: { type: 'string' },
+                  liveUrl: { type: 'string' },
+                  featured: { type: 'boolean' },
+                  order: { type: 'number' },
+                  image: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Project updated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/Project' },
+                    message: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      patch: {
+        tags: ['Projects'],
+        summary: 'Partially update project',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  tags: { type: 'array', items: { type: 'string' } },
+                  stack: { type: 'array', items: { type: 'string' } },
+                  githubUrl: { type: 'string' },
+                  liveUrl: { type: 'string' },
+                  featured: { type: 'boolean' },
+                  order: { type: 'number' },
+                  image: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Project updated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/Project' },
+                    message: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      delete: {
+        tags: ['Projects'],
+        summary: 'Delete project (soft delete)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: {
+            description: 'Project deleted',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Success' } } },
+          },
+        },
+      },
+    },
+    '/blogs': {
+      get: {
+        tags: ['Blogs'],
+        summary: 'Get all blogs',
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'number' } },
+          { name: 'limit', in: 'query', schema: { type: 'number' } },
+          { name: 'published', in: 'query', schema: { type: 'boolean' } },
+        ],
+        responses: {
+          200: {
+            description: 'Success',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { type: 'array', items: { $ref: '#/components/schemas/Blog' } },
+                    pagination: { $ref: '#/components/schemas/Pagination' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      post: {
+        tags: ['Blogs'],
+        summary: 'Create a blog post',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['title', 'content'],
+                properties: {
+                  title: { type: 'string' },
+                  content: { type: 'string' },
+                  excerpt: { type: 'string' },
+                  tags: { type: 'array', items: { type: 'string' } },
+                  published: { type: 'boolean' },
+                  image: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Blog created',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/Blog' },
+                    message: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/blogs/{slug}': {
+      get: {
+        tags: ['Blogs'],
+        summary: 'Get blog by slug',
+        parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: {
+            description: 'Success',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { $ref: '#/components/schemas/Blog' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/contact': {
+      get: {
+        tags: ['Contact'],
+        summary: 'Get all contact messages',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'number' } },
+          { name: 'limit', in: 'query', schema: { type: 'number' } },
+          { name: 'unread', in: 'query', schema: { type: 'boolean' } },
+          { name: 'unreplied', in: 'query', schema: { type: 'boolean' } },
+        ],
+        responses: {
+          200: {
+            description: 'Success',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { type: 'array', items: { $ref: '#/components/schemas/Contact' } },
+                    pagination: { $ref: '#/components/schemas/Pagination' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      post: {
+        tags: ['Contact'],
+        summary: 'Submit contact form',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name', 'email', 'message'],
+                properties: {
+                  name: { type: 'string' },
+                  email: { type: 'string', format: 'email' },
+                  subject: { type: 'string' },
+                  message: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Message sent',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: { type: 'object', properties: { id: { type: 'string' } } },
+                    message: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/skills': {
+      get: {
+        tags: ['Skills'],
+        summary: 'Get all skills',
+        parameters: [{ name: 'category', in: 'query', schema: { type: 'string' } }],
+        responses: {
+          200: {
+            description: 'Success',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      oneOf: [
+                        { type: 'array', items: { $ref: '#/components/schemas/Skill' } },
+                        {
+                          type: 'object',
+                          additionalProperties: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/Skill' },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/analytics/summary': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Get analytics summary',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Success',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        totalViews: { type: 'number' },
+                        projectViews: { type: 'number' },
+                        blogViews: { type: 'number' },
+                        topProjects: { type: 'array', items: { type: 'object' } },
+                        topBlogs: { type: 'array', items: { type: 'object' } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+// Create docs directory if it doesn't exist
+const docsDir = join(process.cwd(), 'src', 'docs');
+try {
+  mkdirSync(docsDir, { recursive: true });
+} catch {
+  // Directory might already exist
+}
+
+// Write OpenAPI spec to file
+const outputPath = join(docsDir, 'openapi.json');
+writeFileSync(outputPath, JSON.stringify(openApiSpec, null, 2));
+
+console.log('✅ OpenAPI specification generated successfully!');
+console.log(`📄 File saved to: ${outputPath}`);
