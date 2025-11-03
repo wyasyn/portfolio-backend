@@ -5,6 +5,7 @@ import contactRoutes from './contact.routes';
 import skillRoutes from './skill.routes';
 import analyticsRoutes from './analytics.routes';
 import authRoutes from './auth.routes';
+import adminRoutes from './admin.routes';
 
 const router: Router = Router();
 
@@ -21,6 +22,7 @@ router.get('/health', (req: Request, res: Response) => {
 
 // API Routes
 router.use('/auth', authRoutes);
+router.use('/admin', adminRoutes);
 router.use('/projects', projectRoutes);
 router.use('/blogs', blogRoutes);
 router.use('/contact', contactRoutes);
