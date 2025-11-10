@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '@/types';
 import { prisma } from '@/db/prisma';
@@ -7,20 +6,44 @@ import { cloudinaryService } from '@/services/cloudinary.service';
 import { analyticsService } from '@/services/analytics.service';
 import { NotFoundError } from '@/utils/errors';
 import { getPaginationParams, calculatePagination } from '@/utils/pagination';
+import { generateSlug, ensureUniqueSlug } from '@/utils/slugify';
 
 // Define proper types for cached responses
+interface ProjectData {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  tags: string[];
+  imageUrl: string | null;
+  githubUrl: string | null;
+  liveUrl: string | null;
+  stack: string[];
+  featured: boolean;
+  order: number;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+}
+
+interface PaginationData {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
 interface CachedProjectResponse {
   success: boolean;
-  data: {
-    id: string;
-    [key: string]: any;
-  };
+  data: ProjectData;
 }
 
 interface CachedProjectsListResponse {
   success: boolean;
-  data: any[];
-  pagination: any;
+  data: ProjectData[];
+  pagination: PaginationData;
 }
 
 export class ProjectController {
@@ -64,17 +87,17 @@ export class ProjectController {
     }
   }
 
-  async getById(req: AuthRequest, res: Response, next: NextFunction) {
+  async getBySlug(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params;
+      const { slug } = req.params;
 
-      const cacheKey = `project:${id}`;
+      const cacheKey = `project:${slug}`;
       const cached = await cacheService.get<CachedProjectResponse>(cacheKey);
 
       if (cached) {
         // Track view without blocking response
         analyticsService
-          .trackView('project', id, {
+          .trackView('project', cached.data.id, {
             ipAddress: req.ip || req.socket.remoteAddress,
             userAgent: req.get('user-agent'),
             referrer: req.get('referer'),
@@ -87,7 +110,7 @@ export class ProjectController {
       }
 
       const project = await prisma.project.findUnique({
-        where: { id, deletedAt: null },
+        where: { slug, deletedAt: null },
       });
 
       if (!project) {
@@ -99,7 +122,7 @@ export class ProjectController {
 
       // Track view without blocking response
       analyticsService
-        .trackView('project', id, {
+        .trackView('project', project.id, {
           ipAddress: req.ip || req.socket.remoteAddress,
           userAgent: req.get('user-agent'),
           referrer: req.get('referer'),
@@ -122,9 +145,21 @@ export class ProjectController {
         imageUrl = await cloudinaryService.uploadImage(req.file, 'projects');
       }
 
+      // Generate slug from title or use provided slug
+      let slug = req.body.slug || generateSlug(req.body.title);
+
+      // Ensure slug is unique
+      slug = await ensureUniqueSlug(slug, async (s) => {
+        const found = await prisma.project.findUnique({
+          where: { slug: s },
+        });
+        return !!found && found.deletedAt === null;
+      });
+
       const project = await prisma.project.create({
         data: {
           title: req.body.title,
+          slug,
           description: req.body.description,
           tags: req.body.tags || [],
           stack: req.body.stack || [],
@@ -150,11 +185,11 @@ export class ProjectController {
 
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params;
+      const { slug } = req.params;
       let imageUrl = req.body.imageUrl;
 
       const existing = await prisma.project.findUnique({
-        where: { id, deletedAt: null },
+        where: { slug, deletedAt: null },
       });
 
       if (!existing) {
@@ -165,7 +200,30 @@ export class ProjectController {
         imageUrl = await cloudinaryService.uploadImage(req.file, 'projects');
       }
 
-      const updateData: any = {};
+      interface UpdateData {
+        slug?: string;
+        title?: string;
+        description?: string;
+        tags?: string[];
+        stack?: string[];
+        imageUrl?: string;
+        githubUrl?: string;
+        liveUrl?: string;
+        featured?: boolean;
+        order?: number;
+      }
+
+      const updateData: UpdateData = {};
+
+      // Handle slug update if title changes
+      let newSlug = existing.slug;
+      if (req.body.title && req.body.title !== existing.title) {
+        newSlug = await ensureUniqueSlug(generateSlug(req.body.title), async (s) => {
+          const found = await prisma.project.findUnique({ where: { slug: s } });
+          return !!found && found.id !== existing.id && found.deletedAt === null;
+        });
+        updateData.slug = newSlug;
+      }
 
       // Only update fields that are provided
       if (req.body.title !== undefined) updateData.title = req.body.title;
@@ -179,12 +237,16 @@ export class ProjectController {
       if (req.body.order !== undefined) updateData.order = req.body.order;
 
       const project = await prisma.project.update({
-        where: { id },
+        where: { slug },
         data: updateData,
       });
 
       await cacheService.invalidatePattern('projects:*');
-      await cacheService.del(`project:${id}`);
+      await cacheService.del(`project:${slug}`);
+      // If slug changed, invalidate old slug cache too
+      if (newSlug !== existing.slug) {
+        await cacheService.del(`project:${newSlug}`);
+      }
 
       res.json({
         success: true,
@@ -198,10 +260,10 @@ export class ProjectController {
 
   async delete(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params;
+      const { slug } = req.params;
 
       const project = await prisma.project.findUnique({
-        where: { id, deletedAt: null },
+        where: { slug, deletedAt: null },
       });
 
       if (!project) {
@@ -210,12 +272,12 @@ export class ProjectController {
 
       // Soft delete
       await prisma.project.update({
-        where: { id },
+        where: { slug },
         data: { deletedAt: new Date() },
       });
 
       await cacheService.invalidatePattern('projects:*');
-      await cacheService.del(`project:${id}`);
+      await cacheService.del(`project:${slug}`);
 
       res.json({
         success: true,

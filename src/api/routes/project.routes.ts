@@ -9,7 +9,7 @@ const router: Router = Router();
 
 // Public routes
 router.get('/', projectController.getAll);
-router.get('/:id', projectController.getById);
+router.get('/:slug', projectController.getBySlug);
 
 // Admin routes
 router.post(

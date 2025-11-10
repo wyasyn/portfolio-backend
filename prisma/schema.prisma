@@ -62,6 +62,7 @@ model Session {
 model Project {
   id          String    @id @default(cuid())
   title       String
+  slug        String    @unique
   description String    @db.Text
   tags        String[]
   imageUrl    String?
@@ -79,6 +80,7 @@ model Project {
   @@index([featured])
   @@index([order])
   @@index([deletedAt])
+  @@index([slug]) // Added index for slug lookups
   @@map("projects")
 }
 

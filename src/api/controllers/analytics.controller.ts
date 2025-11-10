@@ -2,7 +2,9 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '@/types';
 import { analyticsService } from '@/services/analytics.service';
 import { cacheService } from '@/db/redis';
+import { prisma } from '@/db/prisma';
 import { AnalyticsSummary } from '@/types';
+import { NotFoundError } from '@/utils/errors';
 
 // Define proper types for cached responses
 interface CachedAnalyticsResponse {
@@ -36,13 +38,27 @@ export class AnalyticsController {
 
   async getProjectViews(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params;
+      const { slug } = req.params;
 
-      const views = await analyticsService.getProjectViews(id);
+      // Convert slug to ID
+      const project = await prisma.project.findUnique({
+        where: { slug, deletedAt: null },
+        select: { id: true, slug: true },
+      });
+
+      if (!project) {
+        throw new NotFoundError('Project not found');
+      }
+
+      const views = await analyticsService.getProjectViews(project.id);
 
       res.json({
         success: true,
-        data: { projectId: id, views },
+        data: {
+          projectId: project.id,
+          projectSlug: project.slug,
+          views,
+        },
       });
     } catch (error) {
       next(error);
@@ -51,13 +67,27 @@ export class AnalyticsController {
 
   async getBlogViews(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params;
+      const { slug } = req.params;
 
-      const views = await analyticsService.getBlogViews(id);
+      // Convert slug to ID
+      const blog = await prisma.blog.findUnique({
+        where: { slug, deletedAt: null },
+        select: { id: true, slug: true },
+      });
+
+      if (!blog) {
+        throw new NotFoundError('Blog post not found');
+      }
+
+      const views = await analyticsService.getBlogViews(blog.id);
 
       res.json({
         success: true,
-        data: { blogId: id, views },
+        data: {
+          blogId: blog.id,
+          blogSlug: blog.slug,
+          views,
+        },
       });
     } catch (error) {
       next(error);
@@ -66,7 +96,7 @@ export class AnalyticsController {
 
   async getViewsByDateRange(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { type, id } = req.params;
+      const { type, slug } = req.params;
       const { startDate, endDate } = req.query;
 
       if (!startDate || !endDate) {
@@ -91,6 +121,28 @@ export class AnalyticsController {
           success: false,
           message: 'Invalid date format',
         });
+      }
+
+      // Convert slug to ID
+      let id: string;
+      if (type === 'project') {
+        const project = await prisma.project.findUnique({
+          where: { slug, deletedAt: null },
+          select: { id: true },
+        });
+        if (!project) {
+          throw new NotFoundError('Project not found');
+        }
+        id = project.id;
+      } else {
+        const blog = await prisma.blog.findUnique({
+          where: { slug, deletedAt: null },
+          select: { id: true },
+        });
+        if (!blog) {
+          throw new NotFoundError('Blog post not found');
+        }
+        id = blog.id;
       }
 
       const views = await analyticsService.getViewsByDateRange(type, id, start, end);

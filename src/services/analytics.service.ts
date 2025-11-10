@@ -44,14 +44,14 @@ export class AnalyticsService {
       }),
     ]);
 
-    // Get project details
+    // Get project details with slug
     const projectIds = projectAnalytics
       .map((item) => item.projectId)
       .filter((id): id is string => id !== null);
 
     const projects = await prisma.project.findMany({
       where: { id: { in: projectIds } },
-      select: { id: true, title: true },
+      select: { id: true, title: true, slug: true },
     });
 
     const projectMap = new Map(projects.map((p) => [p.id, p]));
@@ -63,19 +63,20 @@ export class AnalyticsService {
         return {
           id: project.id,
           title: project.title,
+          slug: project.slug,
           views: item._count.id,
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
 
-    // Get blog details
+    // Get blog details with slug
     const blogIds = blogAnalytics
       .map((item) => item.blogId)
       .filter((id): id is string => id !== null);
 
     const blogs = await prisma.blog.findMany({
       where: { id: { in: blogIds } },
-      select: { id: true, title: true },
+      select: { id: true, title: true, slug: true },
     });
 
     const blogMap = new Map(blogs.map((b) => [b.id, b]));
@@ -87,6 +88,7 @@ export class AnalyticsService {
         return {
           id: blog.id,
           title: blog.title,
+          slug: blog.slug,
           views: item._count.id,
         };
       })
