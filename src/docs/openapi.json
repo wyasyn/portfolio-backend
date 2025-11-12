@@ -3,7 +3,7 @@
   "info": {
     "title": "Portfolio API",
     "version": "1.0.0",
-    "description": "Complete API documentation for portfolio website with authentication, projects, blogs, skills, contact forms, analytics, and admin features.",
+    "description": "Complete API documentation for portfolio website with Better Auth authentication, projects, blogs, skills, contact forms, analytics, and admin features.",
     "contact": {
       "name": "API Support",
       "email": "support@example.com"
@@ -51,11 +51,11 @@
   ],
   "components": {
     "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "description": "JWT token obtained from login endpoint"
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+        "description": "Better Auth session cookie (automatically set after login)"
       }
     },
     "schemas": {
@@ -101,29 +101,21 @@
       "Pagination": {
         "type": "object",
         "properties": {
-          "currentPage": {
+          "page": {
             "type": "number",
             "example": 1
+          },
+          "limit": {
+            "type": "number",
+            "example": 10
+          },
+          "total": {
+            "type": "number",
+            "example": 100
           },
           "totalPages": {
             "type": "number",
             "example": 10
-          },
-          "totalItems": {
-            "type": "number",
-            "example": 100
-          },
-          "itemsPerPage": {
-            "type": "number",
-            "example": 10
-          },
-          "hasNextPage": {
-            "type": "boolean",
-            "example": true
-          },
-          "hasPrevPage": {
-            "type": "boolean",
-            "example": false
           }
         }
       },
@@ -132,33 +124,52 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "cuid"
           },
           "email": {
             "type": "string",
             "format": "email"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "role": {
             "type": "string",
             "enum": [
               "USER",
               "ADMIN"
-            ]
+            ],
+            "default": "USER"
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "default": false
+          },
+          "image": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
           },
           "isActive": {
-            "type": "boolean"
+            "type": "boolean",
+            "default": true
           },
           "banned": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true,
+            "default": false
           },
           "banReason": {
             "type": "string",
             "nullable": true
           },
-          "banExpiresAt": {
+          "banExpires": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastLoginAt": {
             "type": "string",
             "format": "date-time",
             "nullable": true
@@ -188,7 +199,8 @@
               },
               "token": {
                 "type": "string",
-                "description": "JWT access token"
+                "nullable": true,
+                "description": "Session token (also set as HTTP-only cookie)"
               }
             }
           },
@@ -202,7 +214,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "cuid"
           },
           "title": {
             "type": "string",
@@ -279,7 +291,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "cuid"
           },
           "title": {
             "type": "string",
@@ -348,7 +360,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "cuid"
           },
           "category": {
             "type": "string",
@@ -388,7 +400,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "cuid"
           },
           "name": {
             "type": "string",
@@ -462,9 +474,6 @@
                 "title": {
                   "type": "string"
                 },
-                "slug": {
-                  "type": "string"
-                },
                 "views": {
                   "type": "number"
                 }
@@ -480,9 +489,6 @@
                   "type": "string"
                 },
                 "title": {
-                  "type": "string"
-                },
-                "slug": {
                   "type": "string"
                 },
                 "views": {
@@ -530,6 +536,7 @@
           "Auth"
         ],
         "summary": "Register a new user",
+        "description": "Creates a new user account using Better Auth. Password is stored securely in the Account table.",
         "requestBody": {
           "required": true,
           "content": {
@@ -545,17 +552,21 @@
                   "email": {
                     "type": "string",
                     "format": "email",
-                    "example": "user@example.com"
+                    "example": "user@example.com",
+                    "description": "Valid email address"
                   },
                   "password": {
                     "type": "string",
                     "format": "password",
                     "minLength": 8,
-                    "example": "SecurePass123!"
+                    "example": "SecurePass123!",
+                    "description": "Password must be at least 8 characters"
                   },
                   "name": {
                     "type": "string",
-                    "example": "John Doe"
+                    "example": "John Doe",
+                    "minLength": 1,
+                    "description": "User full name (required, cannot be empty)"
                   }
                 }
               }
@@ -587,7 +598,17 @@
             }
           },
           "400": {
-            "description": "Bad request",
+            "description": "Bad request - Invalid input data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Email already exists",
             "content": {
               "application/json": {
                 "schema": {
@@ -605,6 +626,7 @@
           "Auth"
         ],
         "summary": "Login with email and password",
+        "description": "Authenticates user and returns session token. Session is also set as HTTP-only cookie.",
         "requestBody": {
           "required": true,
           "content": {
@@ -618,11 +640,13 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "format": "email"
+                    "format": "email",
+                    "example": "user@example.com"
                   },
                   "password": {
                     "type": "string",
-                    "format": "password"
+                    "format": "password",
+                    "example": "SecurePass123!"
                   }
                 }
               }
@@ -632,6 +656,15 @@
         "responses": {
           "200": {
             "description": "Login successful",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Session cookie (HTTP-only, Secure)",
+                "schema": {
+                  "type": "string",
+                  "example": "better-auth.session_token=abc123; HttpOnly; Secure; SameSite=Strict"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -640,8 +673,28 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request - Missing email or password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Account is banned or inactive",
             "content": {
               "application/json": {
                 "schema": {
@@ -659,14 +712,24 @@
           "Auth"
         ],
         "summary": "Logout current user",
+        "description": "Invalidates the current session and clears session cookie.",
         "security": [
           {
-            "bearerAuth": []
+            "cookieAuth": []
           }
         ],
         "responses": {
           "200": {
             "description": "Logout successful",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Clears session cookie",
+                "schema": {
+                  "type": "string",
+                  "example": "better-auth.session_token=; Max-Age=0"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -676,7 +739,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized",
+            "description": "Unauthorized - No valid session",
             "content": {
               "application/json": {
                 "schema": {
@@ -694,9 +757,10 @@
           "Auth"
         ],
         "summary": "Get current user profile",
+        "description": "Returns the authenticated user profile. Session is validated via cookie.",
         "security": [
           {
-            "bearerAuth": []
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -719,7 +783,17 @@
             }
           },
           "401": {
-            "description": "Unauthorized",
+            "description": "Unauthorized - Invalid or expired session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Account is banned or inactive",
             "content": {
               "application/json": {
                 "schema": {
@@ -737,9 +811,10 @@
           "Admin"
         ],
         "summary": "List all users with filters",
+        "description": "Retrieve paginated list of users. Admin only.",
         "security": [
           {
-            "bearerAuth": []
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -798,13 +873,18 @@
                       "type": "boolean"
                     },
                     "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/User"
+                      "type": "object",
+                      "properties": {
+                        "users": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/User"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/Pagination"
+                        }
                       }
-                    },
-                    "pagination": {
-                      "$ref": "#/components/schemas/Pagination"
                     }
                   }
                 }
@@ -822,7 +902,7 @@
             }
           },
           "403": {
-            "description": "Forbidden - Admin only",
+            "description": "Forbidden - Admin access required",
             "content": {
               "application/json": {
                 "schema": {
@@ -842,7 +922,7 @@
         "summary": "Get user by ID",
         "security": [
           {
-            "bearerAuth": []
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -874,6 +954,26 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Admin access required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "User not found",
             "content": {
@@ -895,7 +995,7 @@
         "summary": "Update user role",
         "security": [
           {
-            "bearerAuth": []
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -961,6 +1061,16 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden - Admin access required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -973,7 +1083,7 @@
         "summary": "Ban a user",
         "security": [
           {
-            "bearerAuth": []
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -1037,6 +1147,16 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden - Admin access required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -1049,7 +1169,7 @@
         "summary": "Unban a user",
         "security": [
           {
-            "bearerAuth": []
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -1083,6 +1203,16 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden - Admin access required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -1095,7 +1225,7 @@
         "summary": "Deactivate user account",
         "security": [
           {
-            "bearerAuth": []
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -1129,6 +1259,16 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden - Admin access required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -1141,7 +1281,7 @@
         "summary": "Activate user account",
         "security": [
           {
-            "bearerAuth": []
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -1172,6 +1312,16 @@
                       "type": "string"
                     }
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Admin access required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }

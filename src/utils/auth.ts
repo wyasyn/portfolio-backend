@@ -1,10 +1,9 @@
-import { betterAuth, Auth } from 'better-auth';
+import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { prisma } from '@/db/prisma';
 import { admin } from 'better-auth/plugins';
-import { Role, User } from '@prisma/client';
 
-export const auth: Auth = betterAuth({
+export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: 'postgresql',
   }),
@@ -19,36 +18,41 @@ export const auth: Auth = betterAuth({
         type: 'string',
         defaultValue: 'USER',
         required: false,
-        input: false, // Don't allow direct input during signup
+        input: false,
       },
       lastLoginAt: {
         type: 'date',
         required: false,
+        input: false,
       },
       isActive: {
         type: 'boolean',
         defaultValue: true,
         required: false,
+        input: false,
       },
       banned: {
         type: 'boolean',
         defaultValue: false,
         required: false,
+        input: false,
       },
       banReason: {
         type: 'string',
         required: false,
+        input: false,
       },
       banExpires: {
         type: 'date',
         required: false,
+        input: false,
       },
     },
   },
 
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: false, // Set to true in production
+    requireEmailVerification: false,
   },
 
   socialProviders: {
@@ -67,24 +71,7 @@ export const auth: Auth = betterAuth({
   // Add admin plugin for role-based access
   plugins: [
     admin({
-      defaultRole: Role.USER,
+      defaultRole: 'USER',
     }),
   ],
-
-  // Add hooks for custom logic
-  async onAfterSignUp(user: User) {
-    // Update last login on signup
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-  },
-
-  async onAfterSignIn(user: User) {
-    // Update last login on signin
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-  },
 });

@@ -8,7 +8,7 @@ const openApiSpec = {
     title: 'Portfolio API',
     version: '1.0.0',
     description:
-      'Complete API documentation for portfolio website with Better Auth authentication, projects, blogs, skills, contact forms, analytics, and admin features.',
+      'Complete API documentation for portfolio website with authentication, projects, blogs, skills, contact forms, analytics, and admin features.',
     contact: {
       name: 'API Support',
       email: 'support@example.com',
@@ -35,11 +35,11 @@ const openApiSpec = {
   ],
   components: {
     securitySchemes: {
-      cookieAuth: {
-        type: 'apiKey',
-        in: 'cookie',
-        name: 'better-auth.session_token',
-        description: 'Better Auth session cookie (automatically set after login)',
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'JWT token obtained from login endpoint',
       },
     },
     schemas: {
@@ -70,26 +70,25 @@ const openApiSpec = {
       Pagination: {
         type: 'object',
         properties: {
-          page: { type: 'number', example: 1 },
-          limit: { type: 'number', example: 10 },
-          total: { type: 'number', example: 100 },
+          currentPage: { type: 'number', example: 1 },
           totalPages: { type: 'number', example: 10 },
+          totalItems: { type: 'number', example: 100 },
+          itemsPerPage: { type: 'number', example: 10 },
+          hasNextPage: { type: 'boolean', example: true },
+          hasPrevPage: { type: 'boolean', example: false },
         },
       },
       User: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'cuid' },
+          id: { type: 'string', format: 'uuid' },
           email: { type: 'string', format: 'email' },
-          name: { type: 'string', nullable: true },
-          role: { type: 'string', enum: ['USER', 'ADMIN'], default: 'USER' },
-          emailVerified: { type: 'boolean', default: false },
-          image: { type: 'string', nullable: true, format: 'uri' },
-          isActive: { type: 'boolean', default: true },
-          banned: { type: 'boolean', nullable: true, default: false },
+          name: { type: 'string' },
+          role: { type: 'string', enum: ['USER', 'ADMIN'] },
+          isActive: { type: 'boolean' },
+          banned: { type: 'boolean' },
           banReason: { type: 'string', nullable: true },
-          banExpires: { type: 'string', format: 'date-time', nullable: true },
-          lastLoginAt: { type: 'string', format: 'date-time', nullable: true },
+          banExpiresAt: { type: 'string', format: 'date-time', nullable: true },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
         },
@@ -102,11 +101,7 @@ const openApiSpec = {
             type: 'object',
             properties: {
               user: { $ref: '#/components/schemas/User' },
-              token: {
-                type: 'string',
-                nullable: true,
-                description: 'Session token (also set as HTTP-only cookie)',
-              },
+              token: { type: 'string', description: 'JWT access token' },
             },
           },
           message: { type: 'string' },
@@ -115,7 +110,7 @@ const openApiSpec = {
       Project: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'cuid' },
+          id: { type: 'string', format: 'uuid' },
           title: { type: 'string', example: 'E-commerce Platform' },
           slug: { type: 'string', example: 'e-commerce-platform' },
           description: { type: 'string', example: 'A full-stack e-commerce solution' },
@@ -138,7 +133,7 @@ const openApiSpec = {
       Blog: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'cuid' },
+          id: { type: 'string', format: 'uuid' },
           title: { type: 'string', example: 'Getting Started with TypeScript' },
           slug: { type: 'string', example: 'getting-started-with-typescript' },
           content: { type: 'string', example: 'Full blog post content in markdown...' },
@@ -165,7 +160,7 @@ const openApiSpec = {
       Skill: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'cuid' },
+          id: { type: 'string', format: 'uuid' },
           category: { type: 'string', example: 'Frontend' },
           name: { type: 'string', example: 'React' },
           iconUrl: { type: 'string', nullable: true, format: 'uri' },
@@ -178,7 +173,7 @@ const openApiSpec = {
       Contact: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'cuid' },
+          id: { type: 'string', format: 'uuid' },
           name: { type: 'string', example: 'John Doe' },
           email: { type: 'string', format: 'email', example: 'john@example.com' },
           subject: { type: 'string', nullable: true, example: 'Project Inquiry' },
@@ -204,6 +199,7 @@ const openApiSpec = {
               properties: {
                 id: { type: 'string' },
                 title: { type: 'string' },
+                slug: { type: 'string' },
                 views: { type: 'number' },
               },
             },
@@ -215,6 +211,7 @@ const openApiSpec = {
               properties: {
                 id: { type: 'string' },
                 title: { type: 'string' },
+                slug: { type: 'string' },
                 views: { type: 'number' },
               },
             },
@@ -246,8 +243,6 @@ const openApiSpec = {
       post: {
         tags: ['Auth'],
         summary: 'Register a new user',
-        description:
-          'Creates a new user account using Better Auth. Password is stored securely in the Account table.',
         requestBody: {
           required: true,
           content: {
@@ -256,25 +251,14 @@ const openApiSpec = {
                 type: 'object',
                 required: ['email', 'password', 'name'],
                 properties: {
-                  email: {
-                    type: 'string',
-                    format: 'email',
-                    example: 'user@example.com',
-                    description: 'Valid email address',
-                  },
+                  email: { type: 'string', format: 'email', example: 'user@example.com' },
                   password: {
                     type: 'string',
                     format: 'password',
                     minLength: 8,
                     example: 'SecurePass123!',
-                    description: 'Password must be at least 8 characters',
                   },
-                  name: {
-                    type: 'string',
-                    example: 'John Doe',
-                    minLength: 1,
-                    description: 'User full name (required, cannot be empty)',
-                  },
+                  name: { type: 'string', example: 'John Doe' },
                 },
               },
             },
@@ -297,11 +281,7 @@ const openApiSpec = {
             },
           },
           400: {
-            description: 'Bad request - Invalid input data',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
-          409: {
-            description: 'Conflict - Email already exists',
+            description: 'Bad request',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
         },
@@ -311,8 +291,6 @@ const openApiSpec = {
       post: {
         tags: ['Auth'],
         summary: 'Login with email and password',
-        description:
-          'Authenticates user and returns session token. Session is also set as HTTP-only cookie.',
         requestBody: {
           required: true,
           content: {
@@ -321,8 +299,8 @@ const openApiSpec = {
                 type: 'object',
                 required: ['email', 'password'],
                 properties: {
-                  email: { type: 'string', format: 'email', example: 'user@example.com' },
-                  password: { type: 'string', format: 'password', example: 'SecurePass123!' },
+                  email: { type: 'string', format: 'email' },
+                  password: { type: 'string', format: 'password' },
                 },
               },
             },
@@ -331,31 +309,14 @@ const openApiSpec = {
         responses: {
           200: {
             description: 'Login successful',
-            headers: {
-              'Set-Cookie': {
-                description: 'Session cookie (HTTP-only, Secure)',
-                schema: {
-                  type: 'string',
-                  example: 'better-auth.session_token=abc123; HttpOnly; Secure; SameSite=Strict',
-                },
-              },
-            },
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/AuthResponse' },
               },
             },
           },
-          400: {
-            description: 'Bad request - Missing email or password',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
           401: {
             description: 'Invalid credentials',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
-          403: {
-            description: 'Forbidden - Account is banned or inactive',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
         },
@@ -365,24 +326,14 @@ const openApiSpec = {
       post: {
         tags: ['Auth'],
         summary: 'Logout current user',
-        description: 'Invalidates the current session and clears session cookie.',
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         responses: {
           200: {
             description: 'Logout successful',
-            headers: {
-              'Set-Cookie': {
-                description: 'Clears session cookie',
-                schema: {
-                  type: 'string',
-                  example: 'better-auth.session_token=; Max-Age=0',
-                },
-              },
-            },
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Success' } } },
           },
           401: {
-            description: 'Unauthorized - No valid session',
+            description: 'Unauthorized',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
         },
@@ -392,8 +343,7 @@ const openApiSpec = {
       get: {
         tags: ['Auth'],
         summary: 'Get current user profile',
-        description: 'Returns the authenticated user profile. Session is validated via cookie.',
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         responses: {
           200: {
             description: 'User profile retrieved',
@@ -410,11 +360,7 @@ const openApiSpec = {
             },
           },
           401: {
-            description: 'Unauthorized - Invalid or expired session',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
-          403: {
-            description: 'Forbidden - Account is banned or inactive',
+            description: 'Unauthorized',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
         },
@@ -426,8 +372,7 @@ const openApiSpec = {
       get: {
         tags: ['Admin'],
         summary: 'List all users with filters',
-        description: 'Retrieve paginated list of users. Admin only.',
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'page', in: 'query', schema: { type: 'number', default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'number', default: 10, maximum: 100 } },
@@ -444,13 +389,8 @@ const openApiSpec = {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean' },
-                    data: {
-                      type: 'object',
-                      properties: {
-                        users: { type: 'array', items: { $ref: '#/components/schemas/User' } },
-                        pagination: { $ref: '#/components/schemas/Pagination' },
-                      },
-                    },
+                    data: { type: 'array', items: { $ref: '#/components/schemas/User' } },
+                    pagination: { $ref: '#/components/schemas/Pagination' },
                   },
                 },
               },
@@ -461,7 +401,7 @@ const openApiSpec = {
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
           403: {
-            description: 'Forbidden - Admin access required',
+            description: 'Forbidden - Admin only',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
         },
@@ -471,7 +411,7 @@ const openApiSpec = {
       get: {
         tags: ['Admin'],
         summary: 'Get user by ID',
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           200: {
@@ -488,14 +428,6 @@ const openApiSpec = {
               },
             },
           },
-          401: {
-            description: 'Unauthorized',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
-          403: {
-            description: 'Forbidden - Admin access required',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
           404: {
             description: 'User not found',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
@@ -507,7 +439,7 @@ const openApiSpec = {
       patch: {
         tags: ['Admin'],
         summary: 'Update user role',
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           required: true,
@@ -543,10 +475,6 @@ const openApiSpec = {
             description: 'Bad request',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
-          403: {
-            description: 'Forbidden - Admin access required',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
         },
       },
     },
@@ -554,7 +482,7 @@ const openApiSpec = {
       post: {
         tags: ['Admin'],
         summary: 'Ban a user',
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           content: {
@@ -593,10 +521,6 @@ const openApiSpec = {
             description: 'Bad request',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
-          403: {
-            description: 'Forbidden - Admin access required',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
         },
       },
     },
@@ -604,7 +528,7 @@ const openApiSpec = {
       post: {
         tags: ['Admin'],
         summary: 'Unban a user',
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           200: {
@@ -622,10 +546,6 @@ const openApiSpec = {
               },
             },
           },
-          403: {
-            description: 'Forbidden - Admin access required',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
         },
       },
     },
@@ -633,7 +553,7 @@ const openApiSpec = {
       post: {
         tags: ['Admin'],
         summary: 'Deactivate user account',
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           200: {
@@ -651,10 +571,6 @@ const openApiSpec = {
               },
             },
           },
-          403: {
-            description: 'Forbidden - Admin access required',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
-          },
         },
       },
     },
@@ -662,7 +578,7 @@ const openApiSpec = {
       post: {
         tags: ['Admin'],
         summary: 'Activate user account',
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           200: {
@@ -679,10 +595,6 @@ const openApiSpec = {
                 },
               },
             },
-          },
-          403: {
-            description: 'Forbidden - Admin access required',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
         },
       },
@@ -1767,9 +1679,6 @@ const openApiSpec = {
   },
 };
 
-// Add all other endpoints (Projects, Blogs, Skills, Contact, Analytics)
-// Copy from the original file starting from '/projects' endpoint...
-
 // Create docs directory if it doesn't exist
 const docsDir = join(process.cwd(), 'src', 'docs');
 try {
@@ -1785,8 +1694,6 @@ writeFileSync(outputPath, JSON.stringify(openApiSpec, null, 2));
 console.log('✅ OpenAPI specification generated successfully!');
 console.log(`📄 File saved to: ${outputPath}`);
 console.log('\n📋 Summary:');
-console.log(`   - Authentication: Better Auth with cookie-based sessions`);
-console.log(`   - Security: HTTP-only cookies, no password in User model`);
 console.log(`   - ${Object.keys(openApiSpec.paths).length} endpoints documented`);
 console.log(`   - ${openApiSpec.tags.length} tags/categories`);
 console.log(`   - ${Object.keys(openApiSpec.components.schemas).length} schemas defined`);
@@ -1794,8 +1701,3 @@ console.log('\n💡 You can view this specification using:');
 console.log('   - Swagger UI: https://editor.swagger.io');
 console.log('   - Redoc: https://redocly.github.io/redoc/');
 console.log('   - Or import into Postman/Insomnia');
-console.log('\n🔐 Authentication Notes:');
-console.log('   - Sessions are cookie-based (better-auth.session_token)');
-console.log('   - Cookies are HTTP-only and Secure in production');
-console.log('   - Password stored securely in Account table by Better Auth');
-console.log('   - User table does NOT contain password field');

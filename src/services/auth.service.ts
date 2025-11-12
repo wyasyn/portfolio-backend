@@ -1,15 +1,37 @@
 import { prisma } from '@/db/prisma';
 import { auth } from '@/utils/auth';
-import { Role, Prisma } from '@prisma/client';
+import { Role, Prisma, User } from '@prisma/client';
 import { fromNodeHeaders } from 'better-auth/node';
 import { IncomingHttpHeaders } from 'http';
+import { UserResponse } from '@/types';
+
+// Select only safe fields to return (exclude password)
+const userSelectFields = {
+  id: true,
+  email: true,
+  name: true,
+  role: true,
+  image: true,
+  isActive: true,
+  banned: true,
+  banReason: true,
+  banExpires: true,
+  emailVerified: true,
+  lastLoginAt: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
 
 export class AuthService {
   /**
    * Create a new user with Better Auth
    */
-  async createUser(email: string, password: string, name: string, role: Role = 'USER') {
-    // Better Auth handles user creation through its API
+  async createUser(
+    email: string,
+    password: string,
+    name: string,
+    role: Role = Role.USER
+  ): Promise<UserResponse> {
     const result = await auth.api.signUpEmail({
       body: {
         email,
@@ -30,15 +52,7 @@ export class AuthService {
         lastLoginAt: new Date(),
         isActive: true,
       },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        isActive: true,
-        emailVerified: true,
-        createdAt: true,
-      },
+      select: userSelectFields,
     });
 
     return updatedUser;
@@ -47,7 +61,10 @@ export class AuthService {
   /**
    * Login user with Better Auth
    */
-  async login(email: string, password: string) {
+  async login(
+    email: string,
+    password: string
+  ): Promise<{ user: UserResponse; token: string | null }> {
     const result = await auth.api.signInEmail({
       body: {
         email,
@@ -62,18 +79,7 @@ export class AuthService {
     // Get full user data including all custom attributes
     const user = await prisma.user.findUnique({
       where: { id: result.user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        image: true,
-        isActive: true,
-        banned: true,
-        emailVerified: true,
-        lastLoginAt: true,
-        createdAt: true,
-      },
+      select: userSelectFields,
     });
 
     if (!user) {
@@ -98,14 +104,14 @@ export class AuthService {
 
     return {
       user,
-      token: result.token,
+      token: result.token ?? null,
     };
   }
 
   /**
    * Validate session using Better Auth
    */
-  async validateSession(headers: IncomingHttpHeaders) {
+  async validateSession(headers: IncomingHttpHeaders): Promise<User | null> {
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(headers),
     });
@@ -117,21 +123,6 @@ export class AuthService {
     // Get full user data with all attributes from database
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        image: true,
-        isActive: true,
-        banned: true,
-        banReason: true,
-        banExpires: true,
-        emailVerified: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
     });
 
     return user;
@@ -149,69 +140,43 @@ export class AuthService {
   /**
    * Get user by ID
    */
-  async getUserById(userId: string) {
+  async getUserById(userId: string): Promise<UserResponse | null> {
     return prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        image: true,
-        isActive: true,
-        banned: true,
-        banReason: true,
-        banExpires: true,
-        emailVerified: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: userSelectFields,
     });
   }
 
   /**
    * Update user role (Admin only)
    */
-  async updateUserRole(userId: string, role: Role) {
+  async updateUserRole(userId: string, role: Role): Promise<UserResponse> {
     return prisma.user.update({
       where: { id: userId },
       data: { role },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-      },
+      select: userSelectFields,
     });
   }
 
   /**
    * Ban user (Admin only)
    */
-  async banUser(userId: string, reason?: string, expiresAt?: Date) {
+  async banUser(userId: string, reason?: string, expiresAt?: Date): Promise<UserResponse> {
     return prisma.user.update({
       where: { id: userId },
       data: {
         banned: true,
-        banReason: reason,
-        banExpires: expiresAt,
+        banReason: reason ?? null,
+        banExpires: expiresAt ?? null,
       },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        banned: true,
-        banReason: true,
-        banExpires: true,
-      },
+      select: userSelectFields,
     });
   }
 
   /**
    * Unban user (Admin only)
    */
-  async unbanUser(userId: string) {
+  async unbanUser(userId: string): Promise<UserResponse> {
     return prisma.user.update({
       where: { id: userId },
       data: {
@@ -219,42 +184,29 @@ export class AuthService {
         banReason: null,
         banExpires: null,
       },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        banned: true,
-      },
+      select: userSelectFields,
     });
   }
 
   /**
    * Deactivate user account
    */
-  async deactivateUser(userId: string) {
+  async deactivateUser(userId: string): Promise<UserResponse> {
     return prisma.user.update({
       where: { id: userId },
       data: { isActive: false },
-      select: {
-        id: true,
-        email: true,
-        isActive: true,
-      },
+      select: userSelectFields,
     });
   }
 
   /**
    * Activate user account
    */
-  async activateUser(userId: string) {
+  async activateUser(userId: string): Promise<UserResponse> {
     return prisma.user.update({
       where: { id: userId },
       data: { isActive: true },
-      select: {
-        id: true,
-        email: true,
-        isActive: true,
-      },
+      select: userSelectFields,
     });
   }
 
@@ -265,10 +217,17 @@ export class AuthService {
     page = 1,
     limit = 10,
     filters?: { role?: Role; isActive?: boolean; banned?: boolean }
-  ) {
+  ): Promise<{
+    users: UserResponse[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
     const skip = (page - 1) * limit;
 
-    // Use Prisma.UserWhereInput for type safety
     const where: Prisma.UserWhereInput = {};
 
     if (filters?.role) {
@@ -286,20 +245,7 @@ export class AuthService {
         where,
         skip,
         take: limit,
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          image: true,
-          isActive: true,
-          banned: true,
-          banReason: true,
-          banExpires: true,
-          emailVerified: true,
-          lastLoginAt: true,
-          createdAt: true,
-        },
+        select: userSelectFields,
         orderBy: {
           createdAt: 'desc',
         },

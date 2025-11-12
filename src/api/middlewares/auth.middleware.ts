@@ -8,33 +8,18 @@ import { prisma } from '@/db/prisma';
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    // Use Better Auth's getSession API
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
     });
 
-    if (!session?.user) {
+    if (!session?.user || !session?.session) {
       throw new UnauthorizedError('Invalid or expired token');
     }
 
-    // Fetch complete user data from database including custom attributes
+    // Get full user data from database with proper types
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        emailVerified: true,
-        image: true,
-        lastLoginAt: true,
-        isActive: true,
-        banned: true,
-        banReason: true,
-        banExpires: true,
-        createdAt: true,
-        updatedAt: true,
-        password: true,
-      },
     });
 
     if (!user) {
@@ -45,25 +30,31 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     if (user.banned) {
       // Check if ban has expired
       if (user.banExpires && user.banExpires < new Date()) {
-        // Unban user automatically
-        await prisma.user.update({
+        // Unban user automatically using Prisma
+        const unbannedUser = await prisma.user.update({
           where: { id: user.id },
-          data: { banned: false, banReason: null, banExpires: null },
+          data: {
+            banned: false,
+            banReason: null,
+            banExpires: null,
+          },
         });
+        req.user = unbannedUser;
       } else {
         const message = user.banReason
           ? `Account banned: ${user.banReason}`
           : 'Your account has been banned';
         throw new ForbiddenError(message);
       }
+    } else {
+      // Check if user is active
+      if (!user.isActive) {
+        throw new ForbiddenError('Account is inactive');
+      }
+
+      req.user = user;
     }
 
-    // Check if user is active
-    if (!user.isActive) {
-      throw new ForbiddenError('Account is inactive');
-    }
-
-    req.user = user;
     next();
   } catch (error) {
     next(error);
@@ -71,15 +62,57 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 };
 
 export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (!req.user || req.user.role !== Role.ADMIN) {
+  if (!req.user) {
+    return next(new UnauthorizedError('Authentication required'));
+  }
+
+  if (req.user.role !== Role.ADMIN) {
     return next(new ForbiddenError('Admin access required'));
   }
+
   next();
 };
 
 export const requireActiveUser = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (!req.user || !req.user.isActive) {
+  if (!req.user) {
+    return next(new UnauthorizedError('Authentication required'));
+  }
+
+  if (!req.user.isActive) {
     return next(new ForbiddenError('Active account required'));
   }
+
   next();
+};
+
+/**
+ * Optional middleware to check if user has email verified
+ */
+export const requireEmailVerified = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return next(new UnauthorizedError('Authentication required'));
+  }
+
+  if (!req.user.emailVerified) {
+    return next(new ForbiddenError('Email verification required'));
+  }
+
+  next();
+};
+
+/**
+ * Middleware to check if user has specific role(s)
+ */
+export const requireRole = (...roles: Role[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return next(new UnauthorizedError('Authentication required'));
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return next(new ForbiddenError('Insufficient permissions'));
+    }
+
+    next();
+  };
 };

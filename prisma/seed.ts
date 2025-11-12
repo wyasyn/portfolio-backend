@@ -1,24 +1,9 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Starting database seed...');
-
-  // Create admin user
-  const hashedPassword = await bcrypt.hash('admin123456', 12);
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@portfolio.com' },
-    update: {},
-    create: {
-      email: 'admin@portfolio.com',
-      password: hashedPassword,
-      name: 'Admin User',
-      role: 'ADMIN',
-    },
-  });
-  console.log('✅ Admin user created:', admin.email);
 
   // Sample projects with slugs
   const projects = [
@@ -328,6 +313,12 @@ Start containerizing your applications today!`,
   console.log('✅ Skills created');
 
   console.log('🎉 Database seeded successfully!');
+  console.log('\n📝 Note: To create an admin user, use the registration endpoint:');
+  console.log('   POST /api/v1/auth/register');
+  console.log(
+    '   Body: { "email": "admin@portfolio.com", "password": "admin123456", "name": "Admin User" }'
+  );
+  console.log('   Then manually update the role to ADMIN in the database.\n');
 }
 
 main()
